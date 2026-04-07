@@ -10,6 +10,11 @@
 /**:
   ros__parameters:
 
+    # ── Sim profile ───────────────────────────────────────────
+    profile: "sine"       # "step", "ramp", o "sine"
+    freq_hz: 2.0          # used only if profile == "sine"
+    publish_rate_hz: 1000.0
+
     # ── Motor electrical (from XML: foc_motor_* fields) ────────────────────────
     R:       0.03       # [Ω]  phase resistance          (foc_motor_r)
     L:       9.0e-5     # [H]  mean inductance (Ld+Lq)/2 (foc_motor_l)
