@@ -1,0 +1,67 @@
+# VESC FOC Simulator — Motor & Controller Parameters
+# Source: sim/2026_03_03.xml (VESC Tool export) + derived values
+# All electrical parameters are measured/validated on real hardware via VESC Tool.
+# Mechanical parameters are estimates; refine when chassis data is available.
+
+# ── Namespace prefix used by all three nodes ───────────────────────────────────
+# Each node declares params under its own name; the yaml tree below is flat so
+# every node can read every key (ROS2 loads the whole yaml into the node's ns).
+
+/**:
+  ros__parameters:
+
+    # ── Motor electrical (from XML: foc_motor_* fields) ────────────────────────
+    R:       0.03       # [Ω]  phase resistance          (foc_motor_r)
+    L:       9.0e-5     # [H]  mean inductance (Ld+Lq)/2 (foc_motor_l)
+    Ld:      7.0e-5     # [H]  d-axis inductance  = L − ld_lq_diff/2
+    Lq:      1.1e-4     # [H]  q-axis inductance  = L + ld_lq_diff/2
+    lambda:  0.0115     # [Wb] rotor flux linkage        (foc_motor_flux_linkage)
+    p:       4          # [-]  pole pairs                 (si_motor_poles/2 = 8/2)
+
+    # ── Mechanical (estimated; refine with chassis team data) ──────────────────
+    J_tot:    7.5e-4    # [kg·m²] J_motor + J_wheel/n² = 5e-4 + 2.5e-5
+    B:        0.0       # [Nm·s/rad] viscous friction — start at zero
+    tau_load: 0.0       # [Nm] external load torque — zero for open-loop current test
+
+    # ── Drive train (from XML: si_* fields) ────────────────────────────────────
+    gear_ratio:    10.0   # [-]  (si_gear_ratio)
+    wheel_radius:  0.1015 # [m]  si_wheel_diameter/2 = 0.203/2
+
+    # ── FOC controller (from XML: foc_current_*, foc_pll_*, foc_observer_*) ───
+    current_kp:     0.4        # (foc_current_kp)
+    current_ki:     400.0      # (foc_current_ki)
+    observer_gain:  8140000.0  # (foc_observer_gain)  — used in Phase 2
+    pll_kp:         2000.0     # (foc_pll_kp)
+    pll_ki:         30000.0    # (foc_pll_ki)
+    current_filter: 0.15       # (foc_current_filter_const) LP constant for id/iq filters
+
+    # ── Field weakening (from XML: foc_fw_*) ────────────────────────────────────
+    fw_current_max: 48.0   # [A]  (foc_fw_current_max)
+    fw_duty_start:  0.9    # [-]  (foc_fw_duty_start)  — FW starts at 90% duty
+    fw_ramp_time:   0.2    # [s]  (foc_fw_ramp_time)
+
+    # ── Limits (from XML: l_* fields) ───────────────────────────────────────────
+    l_current_max:    110.0   # [A]   motor traction limit
+    l_current_min:   -110.0   # [A]   motor regen limit
+    l_in_current_max:  80.0   # [A]   battery traction limit
+    l_in_current_min: -80.0   # [A]   battery regen limit
+    l_abs_current_max: 150.0  # [A]   absolute hardware limit
+    l_max_erpm:      70000.0  # [ERPM]
+    l_min_vin:        35.0    # [V]
+    l_max_vin:        70.0    # [V]
+    l_max_duty:        0.95   # [-]   (l_max_duty)
+    cc_min_current:    0.0    # [A]   minimum current for FW activation
+
+    # ── Simulation control ───────────────────────────────────────────────────────
+    sim_dt_s:      0.0001     # [s]  integration timestep = 100 µs (10 kHz)
+    vbus:          51.8       # [V]  nominal bus voltage (14S × 3.7 V)
+    timeout_s:     0.1        # [s]  watchdog: coast if no iq_ref within this period
+
+    # Phase 1: use real angle from plant (perfect encoder).
+    # Set to true in Phase 2 to switch to observer estimate.
+    use_observer:  false
+
+    # ── ECU sim profile ──────────────────────────────────────────────────────────
+    iq_ref_amplitude:  50.0   # [A]   step amplitude for current command
+    t_start_s:          0.5   # [s]   time after start to apply step
+    t_stop_s:           2.5   # [s]   time to return to zero
