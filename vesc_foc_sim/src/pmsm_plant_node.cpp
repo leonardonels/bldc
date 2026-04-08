@@ -24,7 +24,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float64.hpp>
 #include <cmath>
-#include "vesc_foc_sim/foc_math.hpp"
+#include "vesc_foc_sim/adapter.hpp"
 
 using std::placeholders::_1;
 using F64 = std_msgs::msg::Float64;

@@ -11,7 +11,7 @@
   ros__parameters:
 
     # ── Sim profile ───────────────────────────────────────────
-    profile: "speed_profile"   # "sine", "speed_profile"
+    profile: "sine"   # "sine", "speed_profile"
     freq_hz: 2.0               # used only if profile == "sine"
     publish_rate_hz: 1000.0
 
@@ -67,10 +67,11 @@
     use_observer:  false
 
     # ── ECU sim profile ──────────────────────────────────────────────────────────
-    # Open-loop profiles (step / ramp / sine)
-    iq_ref_amplitude:  50.0   # [A]   amplitude for step/ramp/sine profiles
-    t_start_s:          0.5   # [s]   start time for step/ramp/sine profiles
-    t_stop_s:           2.5   # [s]   stop  time for step/ramp profiles
+    # sine / sine_coast profiles
+    iq_ref_amplitude:  50.0   # [A]  sine amplitude
+    t_start_s:          0.5   # [s]  delay before profile starts
+    sine_duration_s:    2.0   # [s]  (sine_coast) active sine window per cycle
+    coast_duration_s:   1.0   # [s]  (sine_coast) silent window — triggers controller watchdog
 
     # Closed-loop speed profile
     kp_speed:    0.5    # [A·s/rad]  proportional gain
