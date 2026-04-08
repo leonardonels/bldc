@@ -2,7 +2,8 @@
 // adapter.hpp — C++ adapter for VESC firmware C math functions.
 //
 // Provides the foc_math:: namespace used by the sim nodes, backed by the real
-// firmware sources (motor/foc_math.c, util/utils_math.c) via foc_bridge.c.
+// firmware sources (motor/foc_math.c, util/utils_math.c, motor/virtual_motor.c,
+// motor/mc_interface.c) via foc_bridge.c.
 //
 // The C++ nodes never include firmware headers directly — all ChibiOS/RTOS
 // types are confined to the C compilation units (foc_bridge.c, foc_math.c).
@@ -13,6 +14,8 @@
 
 // ── Bridge declarations (implemented in src/foc_bridge.c, compiled as C) ─────
 extern "C" {
+    // ── Observer / PLL ────────────────────────────────────────────────────────
+
     // Wraps foc_observer_update() — MXLEMMING mode, SAT_COMP_NONE.
     // State is passed as individual scalars to avoid exposing observer_state
     // (from foc_math.h) to the C++ compiler.
@@ -27,6 +30,54 @@ extern "C" {
     void foc_bridge_pll_run(
         float phase_input, float dt, float kp, float ki,
         float *phase_var, float *speed_var);
+
+    // ── Virtual motor step ────────────────────────────────────────────────────
+    // Ported from motor/virtual_motor.c (run_virtual_motor_electrical/mechanics/
+    // park_clark_inverse). State is passed as individual float pointers.
+    // See foc_bridge.c for full description of differences from original.
+    void vm_step_bridge(
+        float *id_int, float *id, float *iq,
+        float *omega_m, float *theta_e,
+        float vd, float vq, float dt,
+        float R, float Ld, float Lq, float lambda,
+        float J, float tau_load, int pole_pairs,
+        float *i_alpha_out, float *i_beta_out, float *torque_out);
+
+    // ── mc_interface override limits ──────────────────────────────────────────
+    // Ported from motor/mc_interface.c :: update_override_limits().
+    // Struct layout is identical to the C structs in foc_bridge.c.
+    // Only float and int fields — layout-compatible between C and C++.
+    struct limits_params_t {
+        float i_max, i_min;
+        float l_in_current_max, l_in_current_min;
+        float t_fet, t_motor;
+        float l_temp_fet_start, l_temp_fet_end;
+        float l_temp_motor_start, l_temp_motor_end;
+        float l_temp_accel_dec;
+        float v_in;
+        float l_battery_cut_start, l_battery_cut_end;
+        float l_battery_regen_cut_start, l_battery_regen_cut_end;
+        float l_watt_max, l_watt_min;
+        float rpm_now;
+        float l_max_erpm, l_min_erpm, l_erpm_start;
+        float foc_start_curr_dec, foc_start_curr_dec_rpm;
+        float duty_now_abs;
+        float l_max_duty, l_duty_start;
+        float i_in_filter;
+        float l_in_current_map_start;
+        float cc_min_current;
+    };
+
+    struct limits_result_t {
+        float lo_current_max;
+        float lo_current_min;
+        float lo_in_current_max;
+        float lo_in_current_min;
+        int   fault_over_temp_fet;
+        int   fault_over_temp_motor;
+    };
+
+    void compute_limits_bridge(const limits_params_t *p, limits_result_t *r);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -157,6 +208,34 @@ inline float fw_compute(
         else                   fw_new  = fw_target;
     }
     return fw_new;
+}
+
+// ── Virtual motor step (via foc_bridge.c → virtual_motor math) ───────────────
+// State is held by the caller as individual floats (mirrors vm_step_bridge
+// signature). See foc_bridge.c for the full ODE description.
+inline void vm_step(
+        float &id_int, float &id, float &iq,
+        float &omega_m, float &theta_e,
+        float vd, float vq, float dt,
+        float R, float Ld, float Lq, float lambda,
+        float J, float tau_load, int pole_pairs,
+        float &i_alpha_out, float &i_beta_out, float &torque_out)
+{
+    vm_step_bridge(&id_int, &id, &iq, &omega_m, &theta_e,
+                   vd, vq, dt, R, Ld, Lq, lambda, J, tau_load, pole_pairs,
+                   &i_alpha_out, &i_beta_out, &torque_out);
+}
+
+// ── Override limits (via foc_bridge.c → mc_interface math) ───────────────────
+// Type aliases so callers use foc_math::OverrideLimitParams / OverrideLimitResult.
+using OverrideLimitParams = limits_params_t;
+using OverrideLimitResult = limits_result_t;
+
+inline OverrideLimitResult compute_override_limits(const OverrideLimitParams &p)
+{
+    OverrideLimitResult r{};
+    compute_limits_bridge(&p, &r);
+    return r;
 }
 
 } // namespace foc_math

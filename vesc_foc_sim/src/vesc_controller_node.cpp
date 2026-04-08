@@ -66,6 +66,28 @@ public:
         declare_parameter("timeout_s",       0.1);
         declare_parameter("use_observer",    false);
 
+        // ── mc_interface override limits ────────────────────────────────────────
+        declare_parameter("t_fet",                    25.0);
+        declare_parameter("t_motor",                  25.0);
+        declare_parameter("l_temp_fet_start",         85.0);
+        declare_parameter("l_temp_fet_end",          100.0);
+        declare_parameter("l_temp_motor_start",       85.0);
+        declare_parameter("l_temp_motor_end",        100.0);
+        declare_parameter("l_temp_accel_dec",          0.15);
+        declare_parameter("l_battery_cut_start",      47.0);
+        declare_parameter("l_battery_cut_end",        42.0);
+        declare_parameter("l_battery_regen_cut_start", 1000.0);
+        declare_parameter("l_battery_regen_cut_end",   1100.0);
+        declare_parameter("l_watt_max",             1500000.0);
+        declare_parameter("l_watt_min",            -1500000.0);
+        declare_parameter("l_duty_start",              1.0);
+        declare_parameter("l_erpm_start",              1.0);
+        declare_parameter("l_min_erpm",           -70000.0);
+        declare_parameter("l_in_current_map_start",    1.0);
+        declare_parameter("l_in_current_map_filter",   0.01);
+        declare_parameter("foc_start_curr_dec",        1.0);
+        declare_parameter("foc_start_curr_dec_rpm",  2500.0);
+
         // ── Read parameters ────────────────────────────────────────────────────
         lambda_   = static_cast<float>(get_parameter("lambda").as_double());
         Ld_       = static_cast<float>(get_parameter("Ld").as_double());
@@ -98,6 +120,27 @@ public:
         timeout_s_= static_cast<float>(get_parameter("timeout_s").as_double());
         use_obs_  = get_parameter("use_observer").as_bool();
 
+        t_fet_                   = static_cast<float>(get_parameter("t_fet").as_double());
+        t_motor_                 = static_cast<float>(get_parameter("t_motor").as_double());
+        l_temp_fet_start_        = static_cast<float>(get_parameter("l_temp_fet_start").as_double());
+        l_temp_fet_end_          = static_cast<float>(get_parameter("l_temp_fet_end").as_double());
+        l_temp_motor_start_      = static_cast<float>(get_parameter("l_temp_motor_start").as_double());
+        l_temp_motor_end_        = static_cast<float>(get_parameter("l_temp_motor_end").as_double());
+        l_temp_accel_dec_        = static_cast<float>(get_parameter("l_temp_accel_dec").as_double());
+        l_battery_cut_start_     = static_cast<float>(get_parameter("l_battery_cut_start").as_double());
+        l_battery_cut_end_       = static_cast<float>(get_parameter("l_battery_cut_end").as_double());
+        l_battery_regen_cut_start_ = static_cast<float>(get_parameter("l_battery_regen_cut_start").as_double());
+        l_battery_regen_cut_end_ = static_cast<float>(get_parameter("l_battery_regen_cut_end").as_double());
+        l_watt_max_              = static_cast<float>(get_parameter("l_watt_max").as_double());
+        l_watt_min_              = static_cast<float>(get_parameter("l_watt_min").as_double());
+        l_duty_start_            = static_cast<float>(get_parameter("l_duty_start").as_double());
+        l_erpm_start_            = static_cast<float>(get_parameter("l_erpm_start").as_double());
+        l_min_erpm_              = static_cast<float>(get_parameter("l_min_erpm").as_double());
+        l_in_current_map_start_  = static_cast<float>(get_parameter("l_in_current_map_start").as_double());
+        l_in_current_map_filter_ = static_cast<float>(get_parameter("l_in_current_map_filter").as_double());
+        foc_start_curr_dec_      = static_cast<float>(get_parameter("foc_start_curr_dec").as_double());
+        foc_start_curr_dec_rpm_  = static_cast<float>(get_parameter("foc_start_curr_dec_rpm").as_double());
+
         RCLCPP_INFO(get_logger(),
             "Controller — Kp=%.3f Ki=%.1f dt=%.1fµs use_observer=%s",
             kp_, ki_, dt_ * 1e6f, use_obs_ ? "true" : "false");
@@ -126,6 +169,9 @@ public:
         pub_pi_q_err_  = create_publisher<F64>("/foc/pi_q_err",     lat);
         pub_id_ref_    = create_publisher<F64>("/foc/id_ref",       lat);
         pub_iq_clamped_= create_publisher<F64>("/foc/iq_ref_clamped", lat);
+
+        pub_lo_i_max_  = create_publisher<F64>("/foc/lo_current_max", lat);
+        pub_fault_     = create_publisher<F64>("/foc/fault",          lat);
 
         // ── Timer ──────────────────────────────────────────────────────────────
         const auto period_ns = std::chrono::nanoseconds(
@@ -165,9 +211,39 @@ private:
             iq_ref_raw_ = 0.0f;
         }
 
-        // ── Current limits ─────────────────────────────────────────────────────
+        // ── mc_interface override limits ────────────────────────────────────────
+        foc_math::lp_fast(i_in_filter_,
+            (vbus_ > 0.0f) ? (vd_out_ * id_filt_ + vq_out_ * iq_filt_) / vbus_ : 0.0f,
+            l_in_current_map_filter_);
+
+        const float erpm_now = omega_e_ * 60.0f / (2.0f * static_cast<float>(M_PI));
+        const float v_norm_duty = vbus_ * foc_math::ONE_BY_SQRT3;
+        const float duty_abs_now = (v_norm_duty > 0.0f)
+            ? std::fabs(vq_out_) / v_norm_duty : 0.0f;
+
+        const foc_math::OverrideLimitResult lim = foc_math::compute_override_limits({
+            i_max_, i_min_,
+            i_in_max_, i_in_min_,
+            t_fet_, t_motor_,
+            l_temp_fet_start_, l_temp_fet_end_,
+            l_temp_motor_start_, l_temp_motor_end_,
+            l_temp_accel_dec_,
+            vbus_,
+            l_battery_cut_start_, l_battery_cut_end_,
+            l_battery_regen_cut_start_, l_battery_regen_cut_end_,
+            l_watt_max_, l_watt_min_,
+            erpm_now,
+            erpm_max_, l_min_erpm_, l_erpm_start_,
+            foc_start_curr_dec_, foc_start_curr_dec_rpm_,
+            duty_abs_now,
+            max_duty_, l_duty_start_,
+            i_in_filter_,
+            l_in_current_map_start_,
+            cc_min_i_
+        });
+
         float iq_ref = iq_ref_raw_;
-        foc_math::truncate(iq_ref, i_min_, i_max_);
+        foc_math::truncate(iq_ref, lim.lo_current_min, lim.lo_current_max);
 
         // ── Angle selection ────────────────────────────────────────────────────
         float theta_use;
@@ -265,6 +341,8 @@ private:
         publish(pub_pi_q_err_,   Ierr_q);
         publish(pub_id_ref_,     id_ref);
         publish(pub_iq_clamped_, iq_ref);
+        publish(pub_lo_i_max_, lim.lo_current_max);
+        publish(pub_fault_,    (lim.fault_over_temp_fet || lim.fault_over_temp_motor) ? 1.0f : 0.0f);
     }
 
     static void publish(rclcpp::Publisher<F64>::SharedPtr &pub, float val) {
@@ -313,12 +391,26 @@ private:
     // ── Watchdog ──────────────────────────────────────────────────────────────
     float watchdog_timer_{0.0f};
 
+    // ── mc_interface limit params ─────────────────────────────────────────────
+    float t_fet_{25.0f},   t_motor_{25.0f};
+    float l_temp_fet_start_{85.0f},   l_temp_fet_end_{100.0f};
+    float l_temp_motor_start_{85.0f}, l_temp_motor_end_{100.0f};
+    float l_temp_accel_dec_{0.15f};
+    float l_battery_cut_start_{47.0f}, l_battery_cut_end_{42.0f};
+    float l_battery_regen_cut_start_{1000.0f}, l_battery_regen_cut_end_{1100.0f};
+    float l_watt_max_{1.5e6f}, l_watt_min_{-1.5e6f};
+    float l_duty_start_{1.0f}, l_erpm_start_{1.0f}, l_min_erpm_{-70000.0f};
+    float l_in_current_map_start_{1.0f}, l_in_current_map_filter_{0.01f};
+    float foc_start_curr_dec_{1.0f}, foc_start_curr_dec_rpm_{2500.0f};
+    float i_in_filter_{0.0f};
+
     // ── ROS handles ───────────────────────────────────────────────────────────
     rclcpp::Subscription<F64>::SharedPtr sub_iq_ref_, sub_ialpha_, sub_ibeta_,
                                           sub_theta_, sub_omega_, sub_vbus_;
     rclcpp::Publisher<F64>::SharedPtr    pub_vd_, pub_vq_, pub_theta_est_,
                                           pub_pi_d_err_, pub_pi_q_err_,
                                           pub_id_ref_, pub_iq_clamped_;
+    rclcpp::Publisher<F64>::SharedPtr    pub_lo_i_max_, pub_fault_;
     rclcpp::TimerBase::SharedPtr         timer_;
 };
 

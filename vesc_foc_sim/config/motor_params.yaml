@@ -25,7 +25,6 @@
 
     # ── Mechanical (estimated; refine with chassis team data) ──────────────────
     J_tot:    7.5e-4    # [kg·m²] J_motor + J_wheel/n² = 5e-4 + 2.5e-5
-    B:        0.0       # [Nm·s/rad] viscous friction — start at zero
     tau_load: 0.0       # [Nm] external load torque — zero for open-loop current test
 
     # ── Drive train (from XML: si_* fields) ────────────────────────────────────
@@ -56,6 +55,37 @@
     l_max_vin:        70.0    # [V]
     l_max_duty:        0.95   # [-]   (l_max_duty)
     cc_min_current:    0.0    # [A]   minimum current for FW activation
+
+    # ── Temperature limits (from XML: l_temp_* fields) ──────────────────────────
+    # Set t_fet / t_motor above l_temp_*_start to test derating behaviour.
+    t_fet:   25.0    # [°C] simulated FET temperature
+    t_motor: 25.0    # [°C] simulated motor winding temperature
+    l_temp_fet_start:    85.0   # [°C] FET derating begins
+    l_temp_fet_end:     100.0   # [°C] FET fault and zero current
+    l_temp_motor_start:  85.0   # [°C] motor derating begins
+    l_temp_motor_end:   100.0   # [°C] motor fault and zero current
+    l_temp_accel_dec:     0.15  # [-]  accel-only derating factor
+
+    # ── Battery / power limits (from XML) ────────────────────────────────────────
+    l_battery_cut_start:       47.0      # [V]  input current taper start
+    l_battery_cut_end:         42.0      # [V]  full input current cutoff
+    l_battery_regen_cut_start: 1000.0    # [V]  regen cutoff start (disabled)
+    l_battery_regen_cut_end:   1100.0    # [V]  regen full cutoff  (disabled)
+    l_watt_max:   1500000.0              # [W]  max power (effectively unlimited)
+    l_watt_min:  -1500000.0              # [W]  min power (effectively unlimited)
+
+    # ── Speed / duty derating (from XML; value 1.0 disables taper) ───────────────
+    l_duty_start:  1.0    # [-]   duty derating start  (1.0 = disabled)
+    l_erpm_start:  1.0    # [-]   RPM derating start   (1.0 = disabled)
+    l_min_erpm:   -70000.0  # [ERPM] minimum RPM limit
+
+    # ── Input current mapping (from XML) ─────────────────────────────────────────
+    l_in_current_map_start:  1.0   # [-]   input→iq mapping start (1.0 = disabled)
+    l_in_current_map_filter: 0.01  # [-]   LP filter constant for i_in measurement
+
+    # ── Start current decrease (from XML; foc_start_curr_dec=1.0 = disabled) ─────
+    foc_start_curr_dec:     1.0     # [-]   start current factor  (1.0 = disabled)
+    foc_start_curr_dec_rpm: 2500.0  # [ERPM] RPM threshold for start current ramp
 
     # ── Simulation control ───────────────────────────────────────────────────────
     sim_dt_s:      0.0001     # [s]  integration timestep = 100 µs (10 kHz)
