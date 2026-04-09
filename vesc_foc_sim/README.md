@@ -8,10 +8,10 @@ The sim is structured as three independent ROS2 nodes that communicate over topi
 mirroring how the real ECU, VESC, and motor interact on the vehicle.
 
 ```
-┌─────────────┐  /iq_ref   ┌──────────────────┐  /foc/vd, /foc/vq  ┌──────────────┐
+┌─────────────┐  /iq_ref   ┌──────────────────┐  /foc/vd, /foc/vq   ┌──────────────┐
 │   ecu_sim   │ ─────────► │ vesc_controller  │ ──────────────────► │ pmsm_plant   │
 │             │  /foc/vbus │                  │                     │              │
-└─────────────┘            └──────────────────┘                     └──────┬───────┘
+└─────────────┘            └──────────────────┘                     └───────┬──────┘
        ▲                           ▲                                        │
        │      /foc/omega           │  /foc/i_alpha, /foc/i_beta             │
        └───────────────────────────┴────────────────────────────────────────┘
