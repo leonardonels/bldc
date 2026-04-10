@@ -1,5 +1,11 @@
 # VESC FOC Simulator
 
+## NOTES
+https://vesc-project.com/sites/default/files/imce/u15301/VESC6_CAN_CommandsTelemetry.pdf
+https://github.com/vedderb/bldc/blob/master/documentation/comm_can.md
+- look for watt per second charging
+- look for braking sources
+
 A ROS2 closed-loop simulation of the VESC FOC current controller running against
 a PMSM plant model. The goal is to test and validate the real firmware math
 (`motor/foc_math.c`) on a Linux host before deploying to hardware.
