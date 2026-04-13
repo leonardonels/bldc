@@ -11,7 +11,7 @@
   ros__parameters:
 
     # ── Sim profile ───────────────────────────────────────────
-    profile: "speed_profile"   # "sine", "speed_profile", sine_coast
+    profile: "sine"   # "sine", "speed_profile", sine_coast
     freq_hz: 0.5               # used only if profile == "sine"
     publish_rate_hz: 1000.0
 
