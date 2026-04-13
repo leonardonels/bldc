@@ -122,7 +122,7 @@ configured max motor current.
 |-------------------------------------------------------|---------------------------------------|-------|
 | Drive with a torque target                            | `SET_CURRENT` (positive)              | Signed; regen uses negative. |
 | Regen while still moving forward                      | `SET_CURRENT` (negative)              | Watch the ω=0 reversal. |
-| Decelerate, don't reverse                             | `SET_CURRENT_BRAKE`                   | Zero torque at standstill. |
+| Decelerate (regen) without reversing                  | `SET_CURRENT_BRAKE`                   | Zero torque at standstill. |
 | Hold the rotor still                                  | `SET_CURRENT_HANDBRAKE`               | Only mode that clamps angle. |
 | Regulate a speed                                      | `SET_RPM`                             | Electrical RPM. |
 | Go to an angle and stay                               | `SET_POS`                             | Degrees, 0..360. |
