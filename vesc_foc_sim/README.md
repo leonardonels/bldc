@@ -1,5 +1,11 @@
 # VESC FOC Simulator
 
+## NOTES
+https://vesc-project.com/sites/default/files/imce/u15301/VESC6_CAN_CommandsTelemetry.pdf
+https://github.com/vedderb/bldc/blob/master/documentation/comm_can.md
+- look for watt per second charging
+- look for braking sources
+
 A ROS2 closed-loop simulation of the VESC FOC current controller running against
 a PMSM plant model. The goal is to test and validate the real firmware math
 (`motor/foc_math.c`) on a Linux host before deploying to hardware.
@@ -8,10 +14,10 @@ The sim is structured as three independent ROS2 nodes that communicate over topi
 mirroring how the real ECU, VESC, and motor interact on the vehicle.
 
 ```
-┌─────────────┐  /iq_ref   ┌──────────────────┐  /foc/vd, /foc/vq  ┌──────────────┐
+┌─────────────┐  /iq_ref   ┌──────────────────┐  /foc/vd, /foc/vq   ┌──────────────┐
 │   ecu_sim   │ ─────────► │ vesc_controller  │ ──────────────────► │ pmsm_plant   │
 │             │  /foc/vbus │                  │                     │              │
-└─────────────┘            └──────────────────┘                     └──────┬───────┘
+└─────────────┘            └──────────────────┘                     └───────┬──────┘
        ▲                           ▲                                        │
        │      /foc/omega           │  /foc/i_alpha, /foc/i_beta             │
        └───────────────────────────┴────────────────────────────────────────┘
@@ -217,3 +223,102 @@ ros2 topic hz   /foc/vd
 Start with Phase 1 to tune current PI gains, then switch to Phase 2 to test
 the observer. The PLL state is kept in sync during Phase 1 so switching is
 bumpless.
+
+---
+
+## Firmware Module Coverage
+
+This section explains exactly how each of the three firmware modules is exercised
+inside the sim and why each one is handled differently.
+
+---
+
+### `motor/foc_math.c` — compiled directly, called via `foc_bridge.c`
+
+`foc_math.c` is compiled as-is into the `vesc_firmware_c` static library
+(see `CMakeLists.txt`). Two functions are exercised every simulation tick:
+
+**`foc_observer_update()`** (Phase 2, `use_observer: true`)
+
+Called through `foc_bridge_observer_update()` → `foc_math::observer_update()`
+in `vesc_controller_node.cpp`. The bridge constructs a minimal
+`motor_all_state_t` and `mc_configuration` on the stack, sets
+`foc_observer_type = FOC_OBSERVER_MXLEMMING` and
+`foc_sat_comp_mode = SAT_COMP_DISABLED`, then calls the real firmware function.
+The five observer state scalars (`x1`, `x2`, `lambda_est`, `i_alpha_last`,
+`i_beta_last`) are passed as individual float pointers so the C++ caller never
+needs to include `datatypes.h`.
+
+**`foc_pll_run()`** (every tick)
+
+Called through `foc_bridge_pll_run()` → `foc_math::pll_run()`. The bridge
+constructs a minimal `mc_configuration` with only `foc_pll_kp` and `foc_pll_ki`
+populated, then calls the real firmware PLL. In Phase 1 the PLL output is
+discarded in favour of the plant's true angle, but the state is kept in sync so
+that switching to Phase 2 is bumpless.
+
+---
+
+### `motor/virtual_motor.c` — logic ported to `foc_bridge.c`, not compiled directly
+
+`virtual_motor.c` cannot be compiled on Linux because it pulls in a large set of
+RTOS and hardware headers (`terminal.h`, `mc_interface.h`, `mcpwm_foc.h`,
+`commands.h`, `encoder/encoder.h`, ChibiOS types) and operates on global mutable
+firmware state. Instead, the pure math from three of its functions is re-implemented
+as `vm_step_bridge()` in `foc_bridge.c`:
+
+| Original function                          | What it computes                                         |
+|--------------------------------------------|----------------------------------------------------------|
+| `run_virtual_motor_electrical()`           | d/q current Euler step (electrical ODE)                  |
+| `run_virtual_motor_mechanics()`            | speed and angle Euler step (mechanical ODE)              |
+| `run_virtual_motor_park_clarke_inverse()`  | inverse Park transform → αβ currents                    |
+
+`vm_step_bridge()` is called every tick by `pmsm_plant_node.cpp` via
+`foc_math::vm_step()`. It acts as the plant model (the "motor" side of the
+closed loop).
+
+Two known differences from the original `virtual_motor.c` are intentional:
+
+1. **Electrical angle**: `theta_e` accumulates as a true *electrical* angle
+   (`theta_e += p * omega_m * dt`) instead of as a mechanical angle. The original
+   uses a struct field named `phi` (mechanical rotor angle) but passes it directly
+   to Park transforms that expect an electrical angle, which is correct only for
+   `p = 1`.
+2. **Reluctance torque**: the full torque expression
+   `τe = (3/2) · p · (λ + (Ld − Lq) · id) · iq` is used. For an SPM motor
+   (`Ld == Lq`) this reduces to `(3/2) · p · λ · iq`, matching the original.
+
+---
+
+### `motor/mc_interface.c` — `update_override_limits()` ported to `foc_bridge.c`, not compiled directly
+
+`mc_interface.c` cannot be compiled on Linux because it depends on STM32 HAL
+headers (`stm32f4xx_conf.h`, `hw.h`), ChibiOS, BMS, CAN, and dozens of other
+firmware subsystems. The pure math of `update_override_limits()` (lines 2314–2511
+in the firmware) is re-implemented as `compute_limits_bridge()` in `foc_bridge.c`.
+
+All limit categories from the original are present:
+
+| Category                       | Effect on `lo_current_max` / `lo_current_min`       |
+|-------------------------------|------------------------------------------------------|
+| FET temperature derating       | Scales current down as `t_fet` approaches `l_temp_fet_end` |
+| Motor temperature derating     | Same logic for `t_motor`                            |
+| Acceleration-only derating     | Extra derating ramp controlled by `l_temp_accel_dec` |
+| RPM upper limit (`l_max_erpm`) | Tapers positive current to zero above `l_erpm_start · l_max_erpm` |
+| RPM lower limit (`l_min_erpm`) | Tapers positive current to zero below `l_erpm_start · l_min_erpm` |
+| Start-current ramp             | Scales current at low RPM (`foc_start_curr_dec_rpm`) |
+| Duty cycle limit               | Limits current when duty exceeds `l_duty_start · l_max_duty` |
+| Battery discharge cutoff       | Limits input current when `v_in` falls toward `l_battery_cut_end` |
+| Regen overvoltage cutoff       | Limits regen current when `v_in` rises toward `l_battery_regen_cut_end` |
+| Wattage limits                 | Converts `l_watt_max` / `l_watt_min` to an equivalent input current |
+| Input current → iq map         | Reduces `lo_current_max` when filtered input current exceeds `l_in_current_map_start · lo_in_current_max` |
+
+`compute_limits_bridge()` is called every tick by `vesc_controller_node.cpp` via
+`foc_math::compute_override_limits()`. The result's `lo_current_max` /
+`lo_current_min` clamp the Iq setpoint before it reaches the PI controllers.
+`fault_over_temp_fet` and `fault_over_temp_motor` are published on `/foc/fault`
+so over-temperature conditions are observable without running on real hardware.
+
+The two simplifications relative to the firmware are:
+- Temperature is a fixed caller-supplied value (no ADC reads).
+- BMS limits are omitted (no-op), matching the sim's standalone use case.

@@ -11,8 +11,8 @@
   ros__parameters:
 
     # ── Sim profile ───────────────────────────────────────────
-    profile: "sine"   # "sine", "speed_profile"
-    freq_hz: 2.0               # used only if profile == "sine"
+    profile: "speed_profile"   # "sine", "speed_profile", sine_coast
+    freq_hz: 0.5               # used only if profile == "sine"
     publish_rate_hz: 1000.0
 
     # ── Motor electrical (from XML: foc_motor_* fields) ────────────────────────
@@ -109,5 +109,7 @@
     # l_current_max is already declared above (110.0 A) — shared with controller
 
     speed_waypoints:
-      t_s:                [0.0, 0.5, 2.5, 3.0, 5.0, 5.5]
-      omega_target_radps: [0.0, 500.0, 500.0, 200.0, 200.0, 0.0]
+      # t_s:                [0.0, 0.5, 2.5, 3.0, 5.0, 5.5]
+      # omega_target_radps: [0.0, 500.0, 500.0, 200.0, 200.0, 0.0]
+      t_s:                [0.0, 3.0, 3.5, 999999.0]
+      omega_target_radps: [0.0, 0.0, 1500.0, 1500.0]
