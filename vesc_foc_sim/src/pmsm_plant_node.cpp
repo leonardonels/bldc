@@ -30,6 +30,8 @@
 //   /foc/theta_real[Float64]  electrical angle [rad]
 //   /foc/omega     [Float64]  electrical speed [rad/s]
 //   /foc/torque    [Float64]  electromagnetic torque [Nm]
+//   /foc/p_elec    [Float64]  electrical power into motor [W]  (1.5·(vd·id+vq·iq))
+//   /foc/p_charge  [Float64]  regen power to DC bus [W]        (max(0,-p_elec))
 
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/float64.hpp>
@@ -81,6 +83,8 @@ public:
         pub_theta_  = create_publisher<F64>("/foc/theta_real", lat);
         pub_omega_  = create_publisher<F64>("/foc/omega",      lat);
         pub_torque_ = create_publisher<F64>("/foc/torque",     lat);
+        pub_pelec_  = create_publisher<F64>("/foc/p_elec",     lat);
+        pub_pchg_   = create_publisher<F64>("/foc/p_charge",   lat);
 
         const auto period_ns = std::chrono::nanoseconds(
             static_cast<int64_t>(dt_ * 1e9));
@@ -105,6 +109,10 @@ private:
         pub(pub_theta_,  theta_e_);
         pub(pub_omega_,  static_cast<float>(p_) * omega_m_);
         pub(pub_torque_, torque);
+
+        const float p_elec = 1.5f * (vd_ * id_ + vq_ * iq_);
+        pub(pub_pelec_, p_elec);
+        pub(pub_pchg_,  p_elec < 0.0f ? -p_elec : 0.0f);
     }
 
     static void pub(rclcpp::Publisher<F64>::SharedPtr &p, float v) {
@@ -130,7 +138,8 @@ private:
     rclcpp::Subscription<F64>::SharedPtr sub_vd_, sub_vq_;
     rclcpp::Publisher<F64>::SharedPtr    pub_id_, pub_iq_,
                                          pub_ialpha_, pub_ibeta_,
-                                         pub_theta_, pub_omega_, pub_torque_;
+                                         pub_theta_, pub_omega_, pub_torque_,
+                                         pub_pelec_, pub_pchg_;
     rclcpp::TimerBase::SharedPtr         timer_;
 };
 
