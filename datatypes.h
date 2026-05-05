@@ -172,6 +172,10 @@ typedef enum {
 	FAULT_CODE_PHASE_FILTER,
 	FAULT_CODE_ENCODER_FAULT,
 	FAULT_CODE_LV_OUTPUT_FAULT,
+	FAULT_CODE_ENCODER_SLIP,
+	FAULT_CODE_OVERSPEED,
+	FAULT_CODE_UNDERSPEED,
+	FAULT_CODE_ABS_OVERSPEED
 } mc_fault_code;
 
 typedef enum {
@@ -419,6 +423,7 @@ typedef struct {
 	float l_current_max_scale;
 	float l_current_min_scale;
 	float l_duty_start;
+	uint8_t l_additional_faults;
 	// Overridden limits (Computed during runtime)
 	float lo_current_max;
 	float lo_current_min;
@@ -734,6 +739,8 @@ typedef struct {
 	bool use_smart_rev;
 	float smart_rev_max_duty;
 	float smart_rev_ramp_time;
+	float coast_brake_level;
+	float coast_brake_ramp_time;
 } chuk_config;
 
 typedef struct {

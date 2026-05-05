@@ -45,6 +45,7 @@ int32_t confgenerator_serialize_mcconf(uint8_t *buffer, const mc_configuration *
 	buffer_append_float16(buffer, conf->l_current_max_scale, 10000, &ind);
 	buffer_append_float16(buffer, conf->l_current_min_scale, 10000, &ind);
 	buffer_append_float16(buffer, conf->l_duty_start, 10000, &ind);
+	buffer[ind++] = conf->l_additional_faults;
 	buffer_append_float32_auto(buffer, conf->sl_min_erpm, &ind);
 	buffer_append_float32_auto(buffer, conf->sl_min_erpm_cycle_int_limit, &ind);
 	buffer_append_float32_auto(buffer, conf->sl_max_fullbreak_current_dir_change, &ind);
@@ -294,6 +295,8 @@ int32_t confgenerator_serialize_appconf(uint8_t *buffer, const app_configuration
 	buffer[ind++] = conf->app_chuk_conf.use_smart_rev;
 	buffer_append_float32_auto(buffer, conf->app_chuk_conf.smart_rev_max_duty, &ind);
 	buffer_append_float32_auto(buffer, conf->app_chuk_conf.smart_rev_ramp_time, &ind);
+	buffer_append_float16(buffer, conf->app_chuk_conf.coast_brake_level, 1000, &ind);
+	buffer_append_float32_auto(buffer, conf->app_chuk_conf.coast_brake_ramp_time, &ind);
 	buffer[ind++] = conf->app_nrf_conf.speed;
 	buffer[ind++] = conf->app_nrf_conf.power;
 	buffer[ind++] = conf->app_nrf_conf.crc_type;
@@ -384,6 +387,7 @@ bool confgenerator_deserialize_mcconf(const uint8_t *buffer, mc_configuration *c
 	conf->l_current_max_scale = buffer_get_float16(buffer, 10000, &ind);
 	conf->l_current_min_scale = buffer_get_float16(buffer, 10000, &ind);
 	conf->l_duty_start = buffer_get_float16(buffer, 10000, &ind);
+	conf->l_additional_faults = buffer[ind++];
 	conf->sl_min_erpm = buffer_get_float32_auto(buffer, &ind);
 	conf->sl_min_erpm_cycle_int_limit = buffer_get_float32_auto(buffer, &ind);
 	conf->sl_max_fullbreak_current_dir_change = buffer_get_float32_auto(buffer, &ind);
@@ -636,6 +640,8 @@ bool confgenerator_deserialize_appconf(const uint8_t *buffer, app_configuration 
 	conf->app_chuk_conf.use_smart_rev = buffer[ind++];
 	conf->app_chuk_conf.smart_rev_max_duty = buffer_get_float32_auto(buffer, &ind);
 	conf->app_chuk_conf.smart_rev_ramp_time = buffer_get_float32_auto(buffer, &ind);
+	conf->app_chuk_conf.coast_brake_level = buffer_get_float16(buffer, 1000, &ind);
+	conf->app_chuk_conf.coast_brake_ramp_time = buffer_get_float32_auto(buffer, &ind);
 	conf->app_nrf_conf.speed = buffer[ind++];
 	conf->app_nrf_conf.power = buffer[ind++];
 	conf->app_nrf_conf.crc_type = buffer[ind++];
@@ -719,6 +725,7 @@ void confgenerator_set_defaults_mcconf(mc_configuration *conf) {
 	conf->l_current_max_scale = MCCONF_L_CURRENT_MAX_SCALE;
 	conf->l_current_min_scale = MCCONF_L_CURRENT_MIN_SCALE;
 	conf->l_duty_start = MCCONF_L_DUTY_START;
+	conf->l_additional_faults = MCCONF_L_ADDITIONAL_FAULTS;
 	conf->sl_min_erpm = MCCONF_SL_MIN_RPM;
 	conf->sl_min_erpm_cycle_int_limit = MCCONF_SL_MIN_ERPM_CYCLE_INT_LIMIT;
 	conf->sl_max_fullbreak_current_dir_change = MCCONF_SL_MAX_FB_CURR_DIR_CHANGE;
@@ -962,6 +969,8 @@ void confgenerator_set_defaults_appconf(app_configuration *conf) {
 	conf->app_chuk_conf.use_smart_rev = APPCONF_CHUK_USE_SMART_REV;
 	conf->app_chuk_conf.smart_rev_max_duty = APPCONF_CHUK_SMART_REV_MAX_DUTY;
 	conf->app_chuk_conf.smart_rev_ramp_time = APPCONF_CHUK_SMART_REV_RAMP_TIME;
+	conf->app_chuk_conf.coast_brake_level = APPCONF_CHUK_COAST_BRAKE_LEVEL;
+	conf->app_chuk_conf.coast_brake_ramp_time = APPCONF_CHUK_COAST_BRAKE_RAMP_TIME;
 	conf->app_nrf_conf.speed = APPCONF_NRF_SPEED;
 	conf->app_nrf_conf.power = APPCONF_NRF_POWER;
 	conf->app_nrf_conf.crc_type = APPCONF_NRF_CRC;
